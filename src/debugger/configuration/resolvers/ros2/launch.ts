@@ -311,8 +311,51 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             }
         }
 
-        const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-        if (isLldbInstalled) {
+        const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
+
+        if (!resolvedCppDebugger) {
+            const message = vscode_utils.getCppDebuggerUnavailableMessage();
+            vscode.window.showErrorMessage(message);
+            throw new Error(message);
+        }
+        if (resolvedCppDebugger === "ms-vscode.cpptools" || resolvedCppDebugger === "anysphere.cpptools") {
+            if (os.platform() === "win32") {
+                const cppvsdbgLaunchConfig: ICppvsdbgLaunchConfiguration = {
+                    name: request.nodeName,
+                    type: "cppvsdbg",
+                    request: "launch",
+                    cwd: ".",
+                    program: request.executable,
+                    args: request.arguments,
+                    environment: envConfigs,
+                    stopAtEntry: stopOnEntry,
+                    symbolSearchPath: request.symbolSearchPath,
+                    sourceFileMap: request.sourceFileMap
+                };
+                return cppvsdbgLaunchConfig;
+            } else {
+                const cppdbgLaunchConfig: ICppdbgLaunchConfiguration = {
+                    name: request.nodeName,
+                    type: "cppdbg",
+                    request: "launch",
+                    cwd: ".",
+                    program: request.executable,
+                    args: request.arguments,
+                    environment: envConfigs,
+                    stopAtEntry: stopOnEntry,
+                    additionalSOLibSearchPath: request.additionalSOLibSearchPath,
+                    sourceFileMap: request.sourceFileMap,
+                    setupCommands: [
+                        {
+                            text: "-enable-pretty-printing",
+                            description: "Enable pretty-printing for gdb",
+                            ignoreFailures: true
+                        }
+                    ]
+                };
+                return cppdbgLaunchConfig;
+            }
+        } else if (resolvedCppDebugger === "lldb") {
             const lldbLaunchConfig: ILldbLaunchConfiguration = {
                 name: request.nodeName,
                 type: "lldb",
@@ -323,46 +366,9 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
                 env: request.env,
                 stopAtEntry: stopOnEntry
             };
-
             return lldbLaunchConfig;
-        } else if (os.platform() === "win32") {
-                const cppvsdbgLaunchConfig: ICppvsdbgLaunchConfiguration = {
-                name: request.nodeName,
-                type: "cppvsdbg",
-                request: "launch",
-                cwd: ".",
-                program: request.executable,
-                args: request.arguments,
-                environment: envConfigs,
-                stopAtEntry: stopOnEntry,
-                symbolSearchPath: request.symbolSearchPath,
-                sourceFileMap: request.sourceFileMap
-
-            };
-
-            return cppvsdbgLaunchConfig;
         } else {
-            const cppdbgLaunchConfig: ICppdbgLaunchConfiguration = {
-                name: request.nodeName,
-                type: "cppdbg",
-                request: "launch",
-                cwd: ".",
-                program: request.executable,
-                args: request.arguments,
-                environment: envConfigs,
-                stopAtEntry: stopOnEntry,
-                additionalSOLibSearchPath: request.additionalSOLibSearchPath,
-                sourceFileMap: request.sourceFileMap,
-                setupCommands: [
-                    {
-                        text: "-enable-pretty-printing",
-                        description: "Enable pretty-printing for gdb",
-                        ignoreFailures: true
-                    }
-                ]
-            };
-            
-            return cppdbgLaunchConfig;
+            throw new Error("No C++ debugger available");
         }
     }
 

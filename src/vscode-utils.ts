@@ -64,24 +64,24 @@ async function checkExternallyManagedEnvironment(env: any): Promise<boolean> {
                 }
             });
         });
-        
+
         const stdlibPath = result.trim();
         if (stdlibPath) {
             // On Ubuntu 24.04, EXTERNALLY-MANAGED is in the Python installation directory
             // e.g., /usr/lib/python3.12/EXTERNALLY-MANAGED
             const externallyManagedPath = path.join(stdlibPath, 'EXTERNALLY-MANAGED');
             const exists = await pfs.exists(externallyManagedPath);
-            
+
             // Also check the parent directory as a fallback
             // e.g., /usr/lib/python3.12/../EXTERNALLY-MANAGED
             if (!exists) {
                 const altPath = path.join(path.dirname(stdlibPath), 'EXTERNALLY-MANAGED');
                 return await pfs.exists(altPath);
             }
-            
+
             return exists;
         }
-        
+
         return false;
     } catch (err) {
         // If we can't check, assume it's not externally managed
@@ -97,20 +97,20 @@ export async function ensureMcpVirtualEnvironment(context: vscode.ExtensionConte
     if (!extensionPath) {
         throw new Error("Extension path is required to create MCP virtual environment.");
     }
-    
+
     let terminal: vscode.Terminal | undefined = undefined;
 
     // Detect system Python for creating the virtual environment
     const isExternallyManaged = await checkExternallyManagedEnvironment(process.env);
-    
+
     if (isExternallyManaged) {
         outputChannel?.appendLine("Creating MCP-specific virtual environment for Ubuntu 24.04+ externally-managed Python.");
-        
+
         const venvPath = path.join(extensionPath, '.venv');
-        
+
         try {
             outputChannel?.appendLine(`Creating MCP virtual environment at: ${venvPath}`);
-            
+
             // Create the virtual environment
             let envAvailable = await new Promise<boolean>((resolve, reject) => {
                 child_process.exec(`python3 -m venv ${venvPath}`, async (err, stdout, stderr) => {
@@ -129,7 +129,7 @@ export async function ensureMcpVirtualEnvironment(context: vscode.ExtensionConte
                                 // Install python3-venv using MCP terminal
                                 terminal = extension.getMcpTerminal();
                                 terminal.sendText("sudo apt update && sudo apt install -y python3-venv");
-                                
+
                                 vscode.window.showInformationMessage(
                                     "Installing python3-venv package. Please check the terminal for progress and restart MCP server after installation completes."
                                 );
@@ -164,12 +164,12 @@ export async function ensureMcpVirtualEnvironment(context: vscode.ExtensionConte
                 const requirementsPath = path.join(extensionPath, 'assets', 'scripts', 'requirements.txt');
                 if (await pfs.exists(requirementsPath)) {
                     outputChannel?.appendLine(`Installing MCP requirements from extension assets`);
-                    
+
                     const venvPip = path.join(venvPath, 'bin', 'pip3');
                     terminal.sendText(`${venvPip} install -r "${requirementsPath}"`);
                 }
             }
-            
+
             outputChannel?.appendLine(`MCP virtual environment ready at ${venvPath}`);
 
             if (!envAvailable) {
@@ -184,7 +184,7 @@ export async function ensureMcpVirtualEnvironment(context: vscode.ExtensionConte
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -193,6 +193,102 @@ export async function ensureMcpVirtualEnvironment(context: vscode.ExtensionConte
  * @returns true if the LLDB extension is installed, false otherwise
  */
 export function isLldbExtensionInstalled(): boolean {
-    const lldbExtension = vscode.extensions.getExtension('vadimcn.vscode-lldb');
-    return lldbExtension !== undefined;
+    return isExtensionInstalled('vadimcn.vscode-lldb');
+}
+
+export type CppDebuggerSetting = "auto" | "ms-vscode.cpptools" | "anysphere.cpptools" | "lldb";
+
+const microsoftCppToolsExtensionId = "ms-vscode.cpptools";
+const anysphereCppToolsExtensionId = "anysphere.cpptools";
+
+function isExtensionInstalled(extensionId: string): boolean {
+    return vscode.extensions.getExtension(extensionId) !== undefined;
+}
+
+export function isMicrosoftCppToolsExtensionInstalled(): boolean {
+    return isExtensionInstalled(microsoftCppToolsExtensionId);
+}
+
+export function isAnysphereCppToolsExtensionInstalled(): boolean {
+    return isExtensionInstalled(anysphereCppToolsExtensionId);
+}
+
+/**
+ * Detects if a cpptools-compatible C/C++ extension is installed.
+ * Supports both ms-vscode.cpptools and anysphere.cpptools.
+ */
+export function isCppToolsExtensionInstalled(): boolean {
+    return isMicrosoftCppToolsExtensionInstalled() || isAnysphereCppToolsExtensionInstalled();
+}
+
+export function getConfiguredCppDebugger(): CppDebuggerSetting {
+    const configuredValue = getExtensionConfiguration().get<string>("cppDebugger", "auto");
+    switch (configuredValue) {
+        case "ms-vscode.cpptools":
+        case "anysphere.cpptools":
+        case "lldb":
+            return configuredValue;
+        default:
+            return "auto";
+    }
+}
+
+function isConfiguredCppDebuggerAvailable(debuggerSetting: CppDebuggerSetting): boolean {
+    switch (debuggerSetting) {
+        case "ms-vscode.cpptools":
+            return isMicrosoftCppToolsExtensionInstalled();
+        case "anysphere.cpptools":
+            return isAnysphereCppToolsExtensionInstalled();
+        case "lldb":
+            return isLldbExtensionInstalled();
+        default:
+            return false;
+    }
+}
+
+export function resolveCppDebugger(): Exclude<CppDebuggerSetting, "auto"> | undefined {
+    const configuredDebugger = getConfiguredCppDebugger();
+    if (configuredDebugger !== "auto") {
+        return isConfiguredCppDebuggerAvailable(configuredDebugger) ? configuredDebugger : undefined;
+    }
+
+    const isCursor = isCursorEditor();
+    const preferredCppToolsDebugger = isCursor ? anysphereCppToolsExtensionId : microsoftCppToolsExtensionId;
+    const fallbackCppToolsDebugger = isCursor ? microsoftCppToolsExtensionId : anysphereCppToolsExtensionId;
+
+    if (isConfiguredCppDebuggerAvailable(preferredCppToolsDebugger as CppDebuggerSetting)) {
+        return preferredCppToolsDebugger as Exclude<CppDebuggerSetting, "auto">;
+    }
+    if (isConfiguredCppDebuggerAvailable(fallbackCppToolsDebugger as CppDebuggerSetting)) {
+        return fallbackCppToolsDebugger as Exclude<CppDebuggerSetting, "auto">;
+    }
+    if (isLldbExtensionInstalled()) {
+        return "lldb";
+    }
+    return undefined;
+}
+
+export function getCppDebuggerUnavailableMessage(): string {
+    const configuredDebugger = getConfiguredCppDebugger();
+    if (configuredDebugger !== "auto") {
+        return `Configured debugger (${configuredDebugger}) is not installed. Install it or set ROS2.cppDebugger to "auto".`;
+    }
+    return "No C++ debugger detected - install ms-vscode.cpptools, anysphere.cpptools, or LLDB.";
+}
+
+/**
+ * Detects if the Microsoft Python extension is installed
+ * @returns true if the Python extension is installed, false otherwise
+ */
+export function isPythonExtensionInstalled(): boolean {
+    const pythonExtension = vscode.extensions.getExtension('ms-python.python');
+    return pythonExtension !== undefined;
+}
+
+/**
+ * Detects if running in Cursor editor
+ * @returns true if running in Cursor, false otherwise
+ */
+export function isCursorEditor(): boolean {
+    return vscode.env.appName.includes('Cursor');
 }

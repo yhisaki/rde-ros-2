@@ -57,13 +57,42 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
 
         let debugConfig: ICppvsdbgAttachConfiguration | ICppdbgAttachConfiguration | IPythonAttachConfiguration | any;
         if (config.runtime === "C++") {
-            const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-            if (isLldbInstalled) {
+            const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
+
+            if (resolvedCppDebugger === "ms-vscode.cpptools" || resolvedCppDebugger === "anysphere.cpptools") {
+                // Prefer cpptools-compatible debugger if available.
+                if (os.platform() === "win32") {
+                    const cppvsdbgAttachConfig: ICppvsdbgAttachConfiguration = {
+                        name: `C++: ${config.processId}`,
+                        type: "cppvsdbg",
+                        request: "attach",
+                        processId: config.processId,
+                    };
+                    debugConfig = cppvsdbgAttachConfig;
+                } else {
+                    const cppdbgAttachConfig: ICppdbgAttachConfiguration = {
+                        name: `C++: ${config.processId}`,
+                        type: "cppdbg",
+                        request: "attach",
+                        program: config.commandLine,
+                        processId: config.processId,
+                        setupCommands: [
+                            {
+                                text: "-enable-pretty-printing",
+                                description: "Enable pretty-printing for gdb",
+                                ignoreFailures: true
+                            }
+                        ]
+                    };
+                    debugConfig = cppdbgAttachConfig;
+                }
+            } else if (resolvedCppDebugger === "lldb") {
+                // Fall back to LLDB if cpptools not available
                 const lldbAttachConfig: any = {
                     name: `C++: ${config.processId}`,
                     type: "lldb",
                     request: "attach",
-                    processId: config.processId,
+                    pid: config.processId,
                 };
                 debugConfig = lldbAttachConfig;
             } else if (os.platform() === "win32") {
@@ -75,21 +104,9 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
                 };
                 debugConfig = cppvsdbgAttachConfig;
             } else {
-                const cppdbgAttachConfig: ICppdbgAttachConfiguration = {
-                    name: `C++: ${config.processId}`,
-                    type: "cppdbg",
-                    request: "attach",
-                    program: config.commandLine,
-                    processId: config.processId,
-                    setupCommands: [
-                        {
-                            text: "-enable-pretty-printing",
-                            description: "Enable pretty-printing for gdb",
-                            ignoreFailures: true
-                        }
-                    ]
-                };
-                debugConfig = cppdbgAttachConfig;
+                const message = vscode_utils.getCppDebuggerUnavailableMessage();
+                vscode.window.showErrorMessage(message);
+                throw new Error(message);
             }
 
         } else if (config.runtime === "Python") {

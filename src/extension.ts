@@ -277,18 +277,15 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Detect C++ debugging capabilities
-    const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-    const isCppToolsInstalled = vscode_utils.isCppToolsExtensionInstalled();
-    const isCursor = vscode_utils.isCursorEditor();
-    
-    if (isCppToolsInstalled) {
-        outputChannel.appendLine("Microsoft C/C++ extension is installed - C++ debugging via cpptools available");
-    } else if (isLldbInstalled) {
-        outputChannel.appendLine("LLDB extension is installed - C++ debugging with LLDB available");
-    } else if (isCursor) {
-        outputChannel.appendLine("No C++ debugger detected - install LLDB extension for C++ debugging");
+    const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
+    if (resolvedCppDebugger === "ms-vscode.cpptools") {
+        outputChannel.appendLine("Using C++ debugger: ms-vscode.cpptools");
+    } else if (resolvedCppDebugger === "anysphere.cpptools") {
+        outputChannel.appendLine("Using C++ debugger: anysphere.cpptools");
+    } else if (resolvedCppDebugger === "lldb") {
+        outputChannel.appendLine("Using C++ debugger: LLDB");
     } else {
-        outputChannel.appendLine("No C++ debugger detected - install Microsoft C/C++ extension (ms-vscode.cpptools) for C++ debugging");
+        outputChannel.appendLine(vscode_utils.getCppDebuggerUnavailableMessage());
     }
 
     // Activate components when the ROS env is changed.
@@ -1062,4 +1059,3 @@ export function getMcpTerminal(): vscode.Terminal {
     
     return mcpServerTerminal;
 }
-

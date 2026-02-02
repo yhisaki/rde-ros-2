@@ -35,9 +35,9 @@ To get started, create a `ros`-type debug configuration with a `launch` request:
 
 ## Note
 
-1. Debugging functionality provided by this extension has dependencies on VS Code’s [C++][ms-vscode.cpptools] and [Python][ms-python.python] extensions, and those have dependencies on the version of VS Code. To ensure everything works as expected, please make sure to have everything up-to-date.
+1. Debugging functionality provided by this extension depends on a C++ debugger extension (`ms-vscode.cpptools` or `anysphere.cpptools`) and the [Python][ms-python.python] extension. To ensure everything works as expected, please keep them up-to-date.
 2. To debug a C++ executable, please make sure the binary is [built with debug symbols][ros_answers_debug_symbol] (e.g. `-DCMAKE_BUILD_TYPE=RelWithDebInfo`, read more about [CMAKE_BUILD_TYPE here][stackoverflow-cmake_build_type]).
-3. To use VS Code's C++ extension with MSVC on Windows, please make sure the VS Code instance is launched from a Visual Studio command prompt.
+3. To use a cpptools-compatible C++ extension with MSVC on Windows, please make sure the editor is launched from a Visual Studio command prompt.
 
 <!-- link to files -->
 [create_attach_debug_configuration]: assets/debug-support/create-attach-debug-config.gif
@@ -51,6 +51,5 @@ To get started, create a `ros`-type debug configuration with a `launch` request:
 [ros_answers_debug_symbol]: https://answers.ros.org/question/200155/how-to-debug-executable-built-with-catkin_make-without-roslaunch/
 
 [ms-python.python]: https://marketplace.visualstudio.com/items?itemName=ms-python.python
-[ms-vscode.cpptools]: https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools
 [ms-vscode.background_bug]: https://github.com/microsoft/vscode/issues/70283
 [stackoverflow-cmake_build_type]: https://stackoverflow.com/a/59314670/888545

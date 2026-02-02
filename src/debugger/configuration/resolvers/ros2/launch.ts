@@ -567,21 +567,14 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             }
         }
 
-        const isCppToolsInstalled = vscode_utils.isCppToolsExtensionInstalled();
-        const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-        const isCursor = vscode_utils.isCursorEditor();
+        const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
 
-        if (!isCppToolsInstalled && !isLldbInstalled) {
-            let message: string;
-            if (isCursor) {
-                message = "LLDB is required for C++ debugging. Install the LLDB extension.";
-            } else {
-                message = "C++ debugging requires the Microsoft C/C++ extension (ms-vscode.cpptools) or LLDB extension.";
-            }
+        if (!resolvedCppDebugger) {
+            const message = vscode_utils.getCppDebuggerUnavailableMessage();
             vscode.window.showErrorMessage(message);
             throw new Error(message);
         }
-        if (isCppToolsInstalled) {
+        if (resolvedCppDebugger === "ms-vscode.cpptools" || resolvedCppDebugger === "anysphere.cpptools") {
             if (os.platform() === "win32") {
                 const cppvsdbgLaunchConfig: ICppvsdbgLaunchConfiguration = {
                     name: request.nodeName,
@@ -618,7 +611,7 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
                 };
                 return cppdbgLaunchConfig;
             }
-        } else if (isLldbInstalled) {
+        } else if (resolvedCppDebugger === "lldb") {
             const lldbLaunchConfig: ILldbLaunchConfiguration = {
                 name: request.nodeName,
                 type: "lldb",

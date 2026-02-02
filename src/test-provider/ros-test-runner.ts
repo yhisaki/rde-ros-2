@@ -615,22 +615,15 @@ export class RosTestRunner {
         // Convert environment to the format expected by C++ debuggers
         const envConfigs = Object.entries(env).map(([name, value]) => ({ name, value }));
 
-        // Prefer cpptools if available, fall back to LLDB
-        const isCppToolsInstalled = vscode_utils.isCppToolsExtensionInstalled();
-        const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-        const isCursor = vscode_utils.isCursorEditor();
+        // Prefer the configured debugger, otherwise resolve the editor-aware default.
+        const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
 
-        if (!isCppToolsInstalled && !isLldbInstalled) {
-            let message: string;
-            if (isCursor) {
-                message = "LLDB is required for C++ test debugging. Install the LLDB extension.";
-            } else {
-                message = "C++ test debugging requires the Microsoft C/C++ extension (ms-vscode.cpptools) or LLDB extension.";
-            }
+        if (!resolvedCppDebugger) {
+            const message = vscode_utils.getCppDebuggerUnavailableMessage();
             vscode.window.showErrorMessage(message);
             throw new Error(message);
         }
-        if (isCppToolsInstalled) {
+        if (resolvedCppDebugger === "ms-vscode.cpptools" || resolvedCppDebugger === "anysphere.cpptools") {
             return {
                 name: name,
                 type: process.platform === "win32" ? "cppvsdbg" : "cppdbg",
@@ -650,7 +643,7 @@ export class RosTestRunner {
                     ]
                 })
             };
-        } else if (isLldbInstalled) {
+        } else if (resolvedCppDebugger === "lldb") {
             return {
                 name: name,
                 type: "lldb",

@@ -57,12 +57,10 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
 
         let debugConfig: ICppvsdbgAttachConfiguration | ICppdbgAttachConfiguration | IPythonAttachConfiguration | any;
         if (config.runtime === "C++") {
-            const isCppToolsInstalled = vscode_utils.isCppToolsExtensionInstalled();
-            const isLldbInstalled = vscode_utils.isLldbExtensionInstalled();
-            const isCursor = vscode_utils.isCursorEditor();
+            const resolvedCppDebugger = vscode_utils.resolveCppDebugger();
 
-            if (isCppToolsInstalled) {
-                // Prefer Microsoft C/C++ tools if available
+            if (resolvedCppDebugger === "ms-vscode.cpptools" || resolvedCppDebugger === "anysphere.cpptools") {
+                // Prefer cpptools-compatible debugger if available.
                 if (os.platform() === "win32") {
                     const cppvsdbgAttachConfig: ICppvsdbgAttachConfiguration = {
                         name: `C++: ${config.processId}`,
@@ -88,23 +86,17 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
                     };
                     debugConfig = cppdbgAttachConfig;
                 }
-            } else if (isLldbInstalled) {
+            } else if (resolvedCppDebugger === "lldb") {
                 // Fall back to LLDB if cpptools not available
                 const lldbAttachConfig: any = {
                     name: `C++: ${config.processId}`,
                     type: "lldb",
                     request: "attach",
-                    processId: config.processId,
+                    pid: config.processId,
                 };
                 debugConfig = lldbAttachConfig;
             } else {
-                // Neither available - prompt appropriately
-                let message: string;
-                if (isCursor) {
-                    message = "LLDB is required for C++ debugging. Install the LLDB extension.";
-                } else {
-                    message = "C++ debugging requires the Microsoft C/C++ extension (ms-vscode.cpptools) or LLDB extension.";
-                }
+                const message = vscode_utils.getCppDebuggerUnavailableMessage();
                 vscode.window.showErrorMessage(message);
                 throw new Error(message);
             }

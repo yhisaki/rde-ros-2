@@ -310,6 +310,23 @@
                     "default": false,
                     "description": "(experimental) Automatically find and use source files instead of installed executables. This allows setting breakpoints in your source code rather than the copied files in the install directory."
                 },
+                "ROS2.debugger": {
+                    "type": "string",
+                    "default": "auto",
+                    "enum": [
+                        "auto",
+                        "ms-vscode.cpptools",
+                        "anysphere.cpptools",
+                        "lldb"
+                    ],
+                    "enumDescriptions": [
+                        "Automatically choose debugger. Defaults to ms-vscode.cpptools in VS Code and anysphere.cpptools in Cursor.",
+                        "Force Microsoft cpptools debugger.",
+                        "Force Anysphere cpptools debugger.",
+                        "Force LLDB debugger."
+                    ],
+                    "description": "C++ debugger selection for ROS debugging and tests."
+                },
                 "ROS2.pixiRoot": {
                     "type": "string",
                     "default": "c:\\pixi_ws",

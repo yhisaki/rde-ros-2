@@ -219,12 +219,84 @@ export function isLldbExtensionInstalled(): boolean {
     return commonIsLldbInstalled();
 }
 
+export type CppDebuggerSetting = "auto" | "ms-vscode.cpptools" | "anysphere.cpptools" | "lldb";
+
+const microsoftCppToolsExtensionId = "ms-vscode.cpptools";
+const anysphereCppToolsExtensionId = "anysphere.cpptools";
+
+function isExtensionInstalled(extensionId: string): boolean {
+    return vscode.extensions.getExtension(extensionId) !== undefined;
+}
+
+export function isMicrosoftCppToolsExtensionInstalled(): boolean {
+    return commonIsCppToolsInstalled() || isExtensionInstalled(microsoftCppToolsExtensionId);
+}
+
+export function isAnysphereCppToolsExtensionInstalled(): boolean {
+    return isExtensionInstalled(anysphereCppToolsExtensionId);
+}
+
 /**
- * Detects if the Microsoft C/C++ extension is installed
- * @returns true if the C/C++ extension is installed, false otherwise
+ * Detects if a cpptools-compatible C/C++ extension is installed.
+ * Supports both ms-vscode.cpptools and anysphere.cpptools.
  */
 export function isCppToolsExtensionInstalled(): boolean {
-    return commonIsCppToolsInstalled();
+    return isMicrosoftCppToolsExtensionInstalled() || isAnysphereCppToolsExtensionInstalled();
+}
+
+export function getConfiguredCppDebugger(): CppDebuggerSetting {
+    const configuredValue = getExtensionConfiguration().get<string>("debugger", "auto");
+    switch (configuredValue) {
+        case "ms-vscode.cpptools":
+        case "anysphere.cpptools":
+        case "lldb":
+            return configuredValue;
+        default:
+            return "auto";
+    }
+}
+
+function isConfiguredCppDebuggerAvailable(debuggerSetting: CppDebuggerSetting): boolean {
+    switch (debuggerSetting) {
+        case "ms-vscode.cpptools":
+            return isMicrosoftCppToolsExtensionInstalled();
+        case "anysphere.cpptools":
+            return isAnysphereCppToolsExtensionInstalled();
+        case "lldb":
+            return isLldbExtensionInstalled();
+        default:
+            return false;
+    }
+}
+
+export function resolveCppDebugger(): Exclude<CppDebuggerSetting, "auto"> | undefined {
+    const configuredDebugger = getConfiguredCppDebugger();
+    if (configuredDebugger !== "auto") {
+        return isConfiguredCppDebuggerAvailable(configuredDebugger) ? configuredDebugger : undefined;
+    }
+
+    const isCursor = isCursorEditor();
+    const preferredCppToolsDebugger = isCursor ? anysphereCppToolsExtensionId : microsoftCppToolsExtensionId;
+    const fallbackCppToolsDebugger = isCursor ? microsoftCppToolsExtensionId : anysphereCppToolsExtensionId;
+
+    if (isConfiguredCppDebuggerAvailable(preferredCppToolsDebugger as CppDebuggerSetting)) {
+        return preferredCppToolsDebugger as Exclude<CppDebuggerSetting, "auto">;
+    }
+    if (isConfiguredCppDebuggerAvailable(fallbackCppToolsDebugger as CppDebuggerSetting)) {
+        return fallbackCppToolsDebugger as Exclude<CppDebuggerSetting, "auto">;
+    }
+    if (isLldbExtensionInstalled()) {
+        return "lldb";
+    }
+    return undefined;
+}
+
+export function getCppDebuggerUnavailableMessage(): string {
+    const configuredDebugger = getConfiguredCppDebugger();
+    if (configuredDebugger !== "auto") {
+        return `Configured debugger (${configuredDebugger}) is not installed. Install it or set ROS2.debugger to "auto".`;
+    }
+    return "No C++ debugger detected - install ms-vscode.cpptools, anysphere.cpptools, or LLDB.";
 }
 
 /**

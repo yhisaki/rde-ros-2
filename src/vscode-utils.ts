@@ -30,12 +30,12 @@ export function getExtensionConfiguration(): vscode.WorkspaceConfiguration {
 }
 
 /**
- * Gets the ROS setup script path from user settings with Windows default for Pixi.
- * Returns the full path to the setup script that should be sourced.
+ * Gets the ROS setup command from user settings.
+ * If empty, returns a default command that sources/calls the Pixi setup script.
  */
 export function getRosSetupScript(): string {
     const config = getExtensionConfiguration();
-    let rosSetupScript = config.get("rosSetupScript", "");
+    let rosSetupScript = config.get("rosSetupScript", "").trim();
     
     // First, handle workspace folder variable substitution if present
     const regex = /\$\{workspaceFolder\}/g;
@@ -49,28 +49,29 @@ export function getRosSetupScript(): string {
         }
     }
     
-    // If still empty after substitution, check for pixiRoot default
+    // If still empty after substitution, build a default setup command using pixiRoot.
     if (!rosSetupScript) {
-        // If pixiRoot is configured, use it on any platform
-        const pixiRoot = config.get("pixiRoot", "");
-        
-        if (pixiRoot) {
-            const shellInfo = ros_utils.detectUserShell();
-            const setupFileName = `local_setup${shellInfo.scriptExtension}`;
-            const pixiRosPath = process.platform === "win32"
-                ? path.join(pixiRoot, "ros2-windows")
-                : pixiRoot;
-            rosSetupScript = path.join(pixiRosPath, setupFileName);
-            console.log('[getRosSetupScript] Using pixi path:', rosSetupScript);
-        } else {
-            // No pixiRoot configured - return empty string to indicate no default
+        const pixiRoot = config.get("pixiRoot", "").trim();
+        if (!pixiRoot) {
             return "";
         }
+
+        const shellInfo = ros_utils.detectUserShell();
+        const setupFileName = `local_setup${shellInfo.scriptExtension}`;
+        const pixiRosPath = process.platform === "win32"
+            ? path.join(pixiRoot, "ros2-windows")
+            : pixiRoot;
+        const setupScriptPath = path.normalize(path.join(pixiRosPath, setupFileName));
+        const quotedPath = `"${setupScriptPath.replace(/"/g, '\\"')}"`;
+
+        rosSetupScript = process.platform === "win32"
+            ? `call ${quotedPath}`
+            : `${shellInfo.sourceCommand} ${quotedPath}`;
+
+        console.log("[getRosSetupScript] Using default setup command:", rosSetupScript);
     }
-    
-    // Normalize path separators for current platform
-    const normalized = path.normalize(rosSetupScript);
-    return normalized;
+
+    return rosSetupScript;
 }
 
 export function createOutputChannel(): vscode.OutputChannel {

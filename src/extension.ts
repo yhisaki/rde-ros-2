@@ -900,10 +900,13 @@ async function sourceRosAndWorkspace(): Promise<void> {
         rosSetupScript = vscode_utils.getRosSetupScript();
     }
 
-    // If the workspace setup script is not set, try to find the ROS setup script in the environment
+    // If no setup command is available, try to find the ROS setup script in the environment.
     let attemptWorkspaceDiscovery = true;
+    let setupInitializedByCommand = false;
+    let setupCommandWasProvided = false;
 
     if (rosSetupScript) {
+        setupCommandWasProvided = true;
         // Regular expression to match '${workspaceFolder}'
         const regex = "\$\{workspaceFolder\}";
         if (rosSetupScript.includes(regex)) {
@@ -915,17 +918,16 @@ async function sourceRosAndWorkspace(): Promise<void> {
             }
         }
 
-        // Try to support cases where the setup script doesn't make sense on different environments, such as host vs container.
-        if (await exists(rosSetupScript)) {
-            try {
-                newEnv = await ros_utils.sourceSetupFile(rosSetupScript, newEnv);
-
-                outputChannel.appendLine(`Sourced ${rosSetupScript}`);
-
-                attemptWorkspaceDiscovery = false;
-            } catch (err) {
-                await vscode.window.setStatusBarMessage(`A ROS setup script was provided, but could not source "${rosSetupScript}". Attempting standard discovery.`);
-            }
+        // ROS2.rosSetupScript is treated as a command string.
+        try {
+            newEnv = await ros_utils.sourceSetupCommand(rosSetupScript, newEnv);
+            outputChannel.appendLine(`Successfully sourced ROS setup command: ${rosSetupScript}`);
+            attemptWorkspaceDiscovery = false;
+            setupInitializedByCommand = true;
+        } catch (err) {
+            outputChannel.appendLine(`ROS setup command failed: ${rosSetupScript}`);
+            newEnv = env || process.env;
+            attemptWorkspaceDiscovery = false;
         }
     }
 
@@ -982,6 +984,7 @@ async function sourceRosAndWorkspace(): Promise<void> {
 
                 outputChannel.appendLine(`Sourcing ROS Distro: ${setupScript}`);
                 newEnv = await ros_utils.sourceSetupFile(setupScript, newEnv);
+                outputChannel.appendLine(`Successfully sourced ROS Distro: ${setupScript}`);
             } catch (err) {
                 await vscode.window.setStatusBarMessage(`Could not source ROS setup script at "${setupScript}".`);
             }
@@ -990,33 +993,34 @@ async function sourceRosAndWorkspace(): Promise<void> {
         }
     }
 
-    let workspaceOverlayPath: string = "";
-    // Source the workspace setup over the top.
+    if (!setupInitializedByCommand && !setupCommandWasProvided) {
+        let workspaceOverlayPath: string = "";
+        // Source the workspace setup over the top.
 
-    if (newEnv.ROS_VERSION === "1") {
-        outputChannel.appendLine(`this extension does not support ROS 1`);
-    } else {    // FUTURE: Revisit if ROS_VERSION changes - not clear it will be called 3
-        if (!await exists(workspaceOverlayPath)) {
-            workspaceOverlayPath = path.join(`${vscode.workspace.rootPath}`, "install");
+        if (newEnv.ROS_VERSION === "1") {
+            outputChannel.appendLine(`this extension does not support ROS 1`);
+        } else {    // FUTURE: Revisit if ROS_VERSION changes - not clear it will be called 3
+            if (!await exists(workspaceOverlayPath)) {
+                workspaceOverlayPath = path.join(`${vscode.workspace.rootPath}`, "install");
+            }
         }
-    }
 
-    let wsSetupScript: string = path.format({
-        dir: workspaceOverlayPath,
-        name: "setup",
-        ext: ros_utils.getSetupScriptExtension(),
-    });
+        let wsSetupScript: string = path.format({
+            dir: workspaceOverlayPath,
+            name: "setup",
+            ext: ros_utils.getSetupScriptExtension(),
+        });
 
-    if (await exists(wsSetupScript)) {
-        outputChannel.appendLine(`Workspace overlay path: ${wsSetupScript}`);
+        if (await exists(wsSetupScript)) {
+            outputChannel.appendLine(`Workspace overlay path: ${wsSetupScript}`);
 
-        try {
-            newEnv = await ros_utils.sourceSetupFile(wsSetupScript, newEnv);
-        } catch (_err) {
-            vscode.window.showErrorMessage("Failed to source the workspace setup file.");
+            try {
+                newEnv = await ros_utils.sourceSetupFile(wsSetupScript, newEnv);
+                outputChannel.appendLine(`Successfully sourced workspace setup: ${wsSetupScript}`);
+            } catch (_err) {
+                vscode.window.showErrorMessage("Failed to source the workspace setup file.");
+            }
         }
-    } else {
-        outputChannel.appendLine(`Not sourcing workspace does not exist yet: ${wsSetupScript}. Need to build workspace.`);
     }
 
     env = newEnv;

@@ -42,6 +42,93 @@ export function sourceSetupFile(filename: string, env?: any): Promise<any> {
     return commonSourceSetupFile(filename, env, options);
 }
 
+/**
+ * Executes a shell command and returns the resulting env.
+ * This allows ROS setup to be provided as a command string.
+ */
+export function sourceSetupCommand(command: string, env?: any): Promise<any> {
+    const shellInfo = detectUserShell();
+    const spawnOptions: child_process.SpawnOptionsWithoutStdio = {
+        cwd: vscode.workspace.rootPath,
+        env: env || process.env,
+        windowsHide: true,
+    };
+
+    const isWindows = process.platform === "win32";
+    const executable = isWindows ? "cmd.exe" : shellInfo.executable;
+    const args = isWindows
+        ? ["/d", "/s", "/c", `${command} && set`]
+        : ["--login", "-c", `${command}; env -0`];
+
+    return new Promise((resolve, reject) => {
+        const proc = child_process.spawn(executable, args, spawnOptions);
+        const stdoutChunks: Buffer[] = [];
+        const stderrChunks: Buffer[] = [];
+
+        proc.stdout.on("data", (data: Buffer) => stdoutChunks.push(data));
+        proc.stderr.on("data", (data: Buffer) => stderrChunks.push(data));
+
+        proc.on("error", (error) => {
+            reject(error);
+        });
+
+        proc.on("close", (code) => {
+            const stdoutText = Buffer.concat(stdoutChunks).toString("utf8");
+            const stderrText = Buffer.concat(stderrChunks).toString("utf8").trim();
+
+            if (stderrText) {
+                extension.outputChannel.appendLine(stderrText);
+            }
+
+            if (code !== 0) {
+                reject(new Error(`Failed to source ROS setup command (exit code ${code}).`));
+                return;
+            }
+
+            const parsedEnv = isWindows ? parseWindowsSetOutput(stdoutText) : parseNullSeparatedEnv(stdoutText);
+            resolve(parsedEnv);
+        });
+    });
+}
+
+function parseNullSeparatedEnv(stdoutText: string): any {
+    const parsedEnv: any = {};
+    for (const entry of stdoutText.split("\0")) {
+        if (!entry) {
+            continue;
+        }
+
+        const separatorIndex = entry.indexOf("=");
+        if (separatorIndex <= 0) {
+            continue;
+        }
+
+        const key = entry.substring(0, separatorIndex);
+        const value = entry.substring(separatorIndex + 1);
+        parsedEnv[key] = value;
+    }
+    return parsedEnv;
+}
+
+function parseWindowsSetOutput(stdoutText: string): any {
+    const parsedEnv: any = {};
+    for (const line of stdoutText.split(/\r?\n/g)) {
+        if (!line) {
+            continue;
+        }
+
+        const separatorIndex = line.indexOf("=");
+        if (separatorIndex <= 0) {
+            continue;
+        }
+
+        const key = line.substring(0, separatorIndex);
+        const value = line.substring(separatorIndex + 1);
+        parsedEnv[key] = value;
+    }
+    return parsedEnv;
+}
+
 export function xacro(filename: string): Promise<any> {
     return new Promise((resolve, reject) => {
         let processOptions = {

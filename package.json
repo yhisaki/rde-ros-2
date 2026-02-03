@@ -288,7 +288,7 @@
                 },
                 "ROS2.rosSetupScript": {
                     "type": "string",
-                    "description": "ROS workspace setup script path. If empty, defaults to '<pixiRoot>\\ros2-windows\\local_setup.bat' when pixiRoot is configured (works on all platforms). Otherwise, you must specify the full path. Supports '${workspaceFolder}' variable substitution."
+                    "description": "ROS setup command to initialize the environment. If empty, defaults to a command that sources/calls '<pixiRoot>\\ros2-windows\\local_setup.bat' (or platform equivalent). Supports '${workspaceFolder}' variable substitution."
                 },
                 "ROS2.mcpServerPort": {
                     "type": "integer",

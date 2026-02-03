@@ -18,6 +18,9 @@ export interface IPackageInfo {
 
 export function getPackageInfo(extensionId: string): IPackageInfo {
     const extension = vscode.extensions.getExtension(extensionId);
+    if (!extension) {
+        return undefined;
+    }
     const metadata = extension.packageJSON;
     if (metadata && ("name" in metadata) && ("version" in metadata) && ("aiKey" in metadata)) {
         return {

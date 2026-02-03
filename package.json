@@ -1,7 +1,7 @@
 {
     "name": "rde-ros-2",
     "version": "1.0.0",
-    "publisher": "Yukinari Hisaki",
+    "publisher": "yhisaki",
     "engines": {
         "vscode": "^1.101.0"
     },

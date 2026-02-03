@@ -51,8 +51,8 @@ export function detectUserShell(): ShellInfo {
             return {
                 name: "fish",
                 executable: shellPath,
-                scriptExtension: ".fish",
-                sourceCommand: "source"
+                scriptExtension: ".bash",
+                sourceCommand: "bass source"
             };
         case "dash":
         case "sh":
